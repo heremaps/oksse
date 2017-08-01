@@ -6,20 +6,20 @@ OkSse is an extension library for OkHttp to create a Server-Sent Event (SSE) cli
 
 # Integration
 
-Using Maven:
-
-```xml
-<dependency>
-    <groupId>com.here.oksse</groupId>
-    <artifactId>oksse</artifactId>
-    <version>1.0-20170222.144214-1</version>
-</dependency>
-```
-
-Using Gradle:
-
+Add JitPack repository:
 ```groovy
-compile 'com.here.oksse:oksse:1.0-20170222.144214-1'
+allprojects {
+    repositories {
+        ...
+        maven { url 'https://jitpack.io' }
+    }
+}
+```
+Add OkSse dependency:
+```groovy
+dependencies {
+    compile 'com.github.heremaps.oksse:oksse:v1.0.0'
+}
 ```
 
 # Usage
