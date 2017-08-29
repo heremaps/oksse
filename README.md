@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/heremaps/oksse.svg?branch=master)](https://travis-ci.org/heremaps/oksse)
+
 # Introduction
 
 OkSse is an extension library for OkHttp to create a Server-Sent Event (SSE) client
