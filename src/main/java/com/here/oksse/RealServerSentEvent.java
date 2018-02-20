@@ -95,6 +95,7 @@ class RealServerSentEvent implements ServerSentEvent {
             listener.onClosed(this);
             if (call != null && !call.isCanceled()) {
                 call.cancel();
+                close();
             }
         }
     }
