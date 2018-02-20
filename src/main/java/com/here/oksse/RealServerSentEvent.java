@@ -137,8 +137,8 @@ class RealServerSentEvent implements ServerSentEvent {
         if (call != null) {
             call.cancel();
         }
-        if (reader != null) {
-            reader.close();
+        if (sseReader != null) {
+            sseReader.close();
         }
     }
 
