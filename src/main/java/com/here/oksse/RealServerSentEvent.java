@@ -31,6 +31,7 @@ class RealServerSentEvent implements ServerSentEvent {
     private OkHttpClient client;
     private Call call;
     private Reader sseReader;
+    private ResponseBody responseBody;
 
     private long reconnectTime = TimeUnit.SECONDS.toMillis(3);
     private long readTimeoutMillis = 0;
@@ -81,7 +82,8 @@ class RealServerSentEvent implements ServerSentEvent {
     }
 
     private void openSse(Response response) {
-        sseReader = new Reader(response.body().source());
+        responseBody = response.body();
+        sseReader = new Reader(responseBody.source());
         sseReader.setTimeout(readTimeoutMillis, TimeUnit.MILLISECONDS);
         listener.onOpen(this, response);
 
@@ -136,6 +138,9 @@ class RealServerSentEvent implements ServerSentEvent {
     public void close() {
         if (call != null) {
             call.cancel();
+        }
+        if (responseBody != null) {
+            responseBody.close();
         }
     }
 
