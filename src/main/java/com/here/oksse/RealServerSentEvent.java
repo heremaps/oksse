@@ -25,7 +25,7 @@ import java.util.regex.Pattern;
 
 class RealServerSentEvent implements ServerSentEvent {
 
-    private final Listener listener;
+    private Listener listener;
     private final Request originalRequest;
 
     private OkHttpClient client;
@@ -34,6 +34,7 @@ class RealServerSentEvent implements ServerSentEvent {
 
     private long reconnectTime = TimeUnit.SECONDS.toMillis(3);
     private long readTimeoutMillis = 0;
+    private String lastEventId;
 
     RealServerSentEvent(Request request, Listener listener) {
         if (!"GET".equals(request.method())) {
@@ -53,13 +54,16 @@ class RealServerSentEvent implements ServerSentEvent {
         if (client == null) {
             throw new AssertionError("Client is null");
         }
-        Request newRequest = request.newBuilder()
+        Request.Builder requestBuilder = request.newBuilder()
                 .header("Accept-Encoding", "")
                 .header("Accept", "text/event-stream")
-                .header("Cache-Control", "no-cache")
-                .build();
+                .header("Cache-Control", "no-cache");
 
-        call = client.newCall(newRequest);
+        if (lastEventId != null) {
+            requestBuilder.header("Last-Event-Id", lastEventId);
+        }
+
+        call = client.newCall(requestBuilder.build());
     }
 
     private void enqueue() {
@@ -83,7 +87,11 @@ class RealServerSentEvent implements ServerSentEvent {
     private void openSse(Response response) {
         sseReader = new Reader(response.body().source());
         sseReader.setTimeout(readTimeoutMillis, TimeUnit.MILLISECONDS);
-        listener.onOpen(this, response);
+        synchronized (this) {
+            if (listener != null) {
+                listener.onOpen(this, response);
+            }
+        }
 
         //noinspection StatementWithEmptyBody
         while (call != null && !call.isCanceled() && sseReader.read()) {
@@ -92,17 +100,26 @@ class RealServerSentEvent implements ServerSentEvent {
 
     private void notifyFailure(Throwable throwable, Response response) {
         if (!retry(throwable, response)) {
-            listener.onClosed(this);
+            synchronized (this) {
+                if (listener != null) {
+                    listener.onClosed(this);
+                }
+            }
             if (call != null && !call.isCanceled()) {
                 call.cancel();
-                close();
             }
         }
     }
 
     private boolean retry(Throwable throwable, Response response) {
-        if (!Thread.currentThread().isInterrupted() && !call.isCanceled() && listener.onRetryError(this, throwable, response)) {
-            Request request = listener.onPreRetry(this, originalRequest);
+        if (!Thread.currentThread().isInterrupted() && !call.isCanceled() && shouldRetryError(throwable, response)) {
+
+            Request request = null;
+            synchronized (this) {
+                if (listener != null) {
+                    request = listener.onPreRetry(this, originalRequest);
+                }
+            }
             if (request == null) {
                 return false;
             }
@@ -118,6 +135,12 @@ class RealServerSentEvent implements ServerSentEvent {
             }
         }
         return false;
+    }
+
+    private boolean shouldRetryError(Throwable throwable, Response response) {
+        synchronized (this) {
+            return listener != null && listener.onRetryError(this, throwable, response);
+        }
     }
 
     @Override
@@ -138,8 +161,8 @@ class RealServerSentEvent implements ServerSentEvent {
         if (call != null) {
             call.cancel();
         }
-        if (sseReader != null) {
-            sseReader.close();
+        synchronized (this) {
+            listener = null;
         }
     }
 
@@ -160,6 +183,7 @@ class RealServerSentEvent implements ServerSentEvent {
         private static final String RETRY = "retry";
         private static final String DEFAULT_EVENT = "message";
         private static final String EMPTY_STRING = "";
+        private static final String OPEN_MESSAGE_DATA = "\"hello\""; //opening message contains "hello" string
 
         private final Pattern DIGITS_ONLY = Pattern.compile("^[\\d]+$");
 
@@ -168,7 +192,6 @@ class RealServerSentEvent implements ServerSentEvent {
         // Intentionally done to reuse StringBuilder for memory optimization
         @SuppressWarnings("PMD.AvoidStringBufferField")
         private StringBuilder data = new StringBuilder();
-        private String lastEventId;
         private String eventName = DEFAULT_EVENT;
 
         Reader(BufferedSource source) {
@@ -215,15 +238,18 @@ class RealServerSentEvent implements ServerSentEvent {
         }
 
         private void processLine(String line) {
-            //log("Sse read line: " + line);
-            if (line.isEmpty()) { // If the line is empty (a blank line). Dispatch the event.
+            if (line == null || line.isEmpty()) { // If the line is empty (a blank line). Dispatch the event.
                 dispatchEvent();
                 return;
             }
 
             int colonIndex = line.indexOf(COLON_DIVIDER);
             if (colonIndex == 0) { // If line starts with COLON dispatch a comment
-                listener.onComment(RealServerSentEvent.this, line.substring(1).trim());
+                synchronized (this) {
+                    if (listener != null) {
+                        listener.onComment(RealServerSentEvent.this, line.substring(1).trim());
+                    }
+                }
             } else if (colonIndex != -1) { // Collect the characters on the line after the first U+003A COLON character (:), and let value be that string.
                 String field = line.substring(0, colonIndex);
                 String value = EMPTY_STRING;
@@ -248,7 +274,11 @@ class RealServerSentEvent implements ServerSentEvent {
             if (dataString.endsWith("\n")) {
                 dataString = dataString.substring(0, dataString.length() - 1);
             }
-            listener.onMessage(RealServerSentEvent.this, lastEventId, eventName, dataString);
+            synchronized (this) {
+                if (listener != null && !dataString.equals(OPEN_MESSAGE_DATA)){
+                    listener.onMessage(RealServerSentEvent.this, lastEventId, eventName, dataString);
+                }
+            }
             data.setLength(0);
             eventName = DEFAULT_EVENT;
         }
@@ -262,8 +292,10 @@ class RealServerSentEvent implements ServerSentEvent {
                 eventName = value;
             } else if (RETRY.equals(field) && DIGITS_ONLY.matcher(value).matches()) {
                 long timeout = Long.parseLong(value);
-                if (listener.onRetryTime(RealServerSentEvent.this, timeout)) {
-                    reconnectTime = timeout;
+                synchronized (this) {
+                    if (listener != null && listener.onRetryTime(RealServerSentEvent.this, timeout)) {
+                        reconnectTime = timeout;
+                    }
                 }
             }
         }
