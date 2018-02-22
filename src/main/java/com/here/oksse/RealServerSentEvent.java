@@ -107,6 +107,7 @@ class RealServerSentEvent implements ServerSentEvent {
             }
             if (call != null && !call.isCanceled()) {
                 call.cancel();
+                close();
             }
         }
     }
@@ -160,6 +161,9 @@ class RealServerSentEvent implements ServerSentEvent {
     public void close() {
         if (call != null) {
             call.cancel();
+        }
+        if (sseReader != null) {
+            sseReader.close();
         }
         synchronized (this) {
             listener = null;
