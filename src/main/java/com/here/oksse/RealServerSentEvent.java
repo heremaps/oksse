@@ -34,6 +34,7 @@ class RealServerSentEvent implements ServerSentEvent {
 
     private long reconnectTime = TimeUnit.SECONDS.toMillis(3);
     private long readTimeoutMillis = 0;
+    private String lastEventId;
 
     RealServerSentEvent(Request request, Listener listener) {
         if (!"GET".equals(request.method())) {
@@ -53,13 +54,16 @@ class RealServerSentEvent implements ServerSentEvent {
         if (client == null) {
             throw new AssertionError("Client is null");
         }
-        Request newRequest = request.newBuilder()
+        Request.Builder requestBuilder = request.newBuilder()
                 .header("Accept-Encoding", "")
                 .header("Accept", "text/event-stream")
-                .header("Cache-Control", "no-cache")
-                .build();
+                .header("Cache-Control", "no-cache");
 
-        call = client.newCall(newRequest);
+        if (lastEventId != null) {
+            requestBuilder.header("Last-Event-Id", lastEventId);
+        }
+
+        call = client.newCall(requestBuilder.build());
     }
 
     private void enqueue() {
@@ -168,7 +172,6 @@ class RealServerSentEvent implements ServerSentEvent {
         // Intentionally done to reuse StringBuilder for memory optimization
         @SuppressWarnings("PMD.AvoidStringBufferField")
         private StringBuilder data = new StringBuilder();
-        private String lastEventId;
         private String eventName = DEFAULT_EVENT;
 
         Reader(BufferedSource source) {
@@ -216,7 +219,7 @@ class RealServerSentEvent implements ServerSentEvent {
 
         private void processLine(String line) {
             //log("Sse read line: " + line);
-            if (line.isEmpty()) { // If the line is empty (a blank line). Dispatch the event.
+            if (line == null || line.isEmpty()) { // If the line is empty (a blank line). Dispatch the event.
                 dispatchEvent();
                 return;
             }
