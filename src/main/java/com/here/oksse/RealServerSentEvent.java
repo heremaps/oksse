@@ -93,10 +93,7 @@ class RealServerSentEvent implements ServerSentEvent {
     private void notifyFailure(Throwable throwable, Response response) {
         if (!retry(throwable, response)) {
             listener.onClosed(this);
-            if (call != null && !call.isCanceled()) {
-                call.cancel();
-                close();
-            }
+            close();
         }
     }
 
@@ -135,11 +132,8 @@ class RealServerSentEvent implements ServerSentEvent {
 
     @Override
     public void close() {
-        if (call != null) {
+        if (call != null && !call.isCanceled()) {
             call.cancel();
-        }
-        if (sseReader != null) {
-            sseReader.close();
         }
     }
 
@@ -189,17 +183,6 @@ class RealServerSentEvent implements ServerSentEvent {
                 return false;
             }
             return true;
-        }
-
-        /**
-         * Close the source
-         */
-        void close() {
-            try {
-                source.close();
-            } catch (IOException e) {
-                // Close quietly
-            }
         }
 
         /**
