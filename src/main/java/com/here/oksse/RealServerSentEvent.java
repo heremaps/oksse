@@ -25,7 +25,7 @@ import java.util.regex.Pattern;
 
 class RealServerSentEvent implements ServerSentEvent {
 
-    private Listener listener;
+    private final Listener listener;
     private final Request originalRequest;
 
     private OkHttpClient client;
@@ -87,11 +87,7 @@ class RealServerSentEvent implements ServerSentEvent {
     private void openSse(Response response) {
         sseReader = new Reader(response.body().source());
         sseReader.setTimeout(readTimeoutMillis, TimeUnit.MILLISECONDS);
-        synchronized (this) {
-            if (listener != null) {
-                listener.onOpen(this, response);
-            }
-        }
+        listener.onOpen(this, response);
 
         //noinspection StatementWithEmptyBody
         while (call != null && !call.isCanceled() && sseReader.read()) {
@@ -100,11 +96,7 @@ class RealServerSentEvent implements ServerSentEvent {
 
     private void notifyFailure(Throwable throwable, Response response) {
         if (!retry(throwable, response)) {
-            synchronized (this) {
-                if (listener != null) {
-                    listener.onClosed(this);
-                }
-            }
+            listener.onClosed(this);
             if (call != null && !call.isCanceled()) {
                 call.cancel();
                 close();
@@ -113,14 +105,8 @@ class RealServerSentEvent implements ServerSentEvent {
     }
 
     private boolean retry(Throwable throwable, Response response) {
-        if (!Thread.currentThread().isInterrupted() && !call.isCanceled() && shouldRetryError(throwable, response)) {
-
-            Request request = null;
-            synchronized (this) {
-                if (listener != null) {
-                    request = listener.onPreRetry(this, originalRequest);
-                }
-            }
+        if (!Thread.currentThread().isInterrupted() && !call.isCanceled() && listener.onRetryError(this, throwable, response)) {
+            Request request = listener.onPreRetry(this, originalRequest);
             if (request == null) {
                 return false;
             }
@@ -136,12 +122,6 @@ class RealServerSentEvent implements ServerSentEvent {
             }
         }
         return false;
-    }
-
-    private boolean shouldRetryError(Throwable throwable, Response response) {
-        synchronized (this) {
-            return listener != null && listener.onRetryError(this, throwable, response);
-        }
     }
 
     @Override
@@ -161,9 +141,6 @@ class RealServerSentEvent implements ServerSentEvent {
     public void close() {
         if (call != null) {
             call.cancel();
-        }
-        synchronized (this) {
-            listener = null;
         }
     }
 
@@ -230,7 +207,7 @@ class RealServerSentEvent implements ServerSentEvent {
          * Sets a reading timeout, so the read operation will get unblock if this timeout is reached.
          *
          * @param timeout timeout to set
-         * @param unit unit of the timeout to set
+         * @param unit    unit of the timeout to set
          */
         void setTimeout(long timeout, TimeUnit unit) {
             if (source != null) {
@@ -246,11 +223,7 @@ class RealServerSentEvent implements ServerSentEvent {
 
             int colonIndex = line.indexOf(COLON_DIVIDER);
             if (colonIndex == 0) { // If line starts with COLON dispatch a comment
-                synchronized (RealServerSentEvent.this) {
-                    if (listener != null) {
-                        listener.onComment(RealServerSentEvent.this, line.substring(1).trim());
-                    }
-                }
+                listener.onComment(RealServerSentEvent.this, line.substring(1).trim());
             } else if (colonIndex != -1) { // Collect the characters on the line after the first U+003A COLON character (:), and let value be that string.
                 String field = line.substring(0, colonIndex);
                 String value = EMPTY_STRING;
@@ -275,10 +248,8 @@ class RealServerSentEvent implements ServerSentEvent {
             if (dataString.endsWith("\n")) {
                 dataString = dataString.substring(0, dataString.length() - 1);
             }
-            synchronized (RealServerSentEvent.this) {
-                if (listener != null && !dataString.equals(OPEN_MESSAGE_DATA)){
-                    listener.onMessage(RealServerSentEvent.this, lastEventId, eventName, dataString);
-                }
+            if (!OPEN_MESSAGE_DATA.equals(dataString)) {
+                listener.onMessage(RealServerSentEvent.this, lastEventId, eventName, dataString);
             }
             data.setLength(0);
             eventName = DEFAULT_EVENT;
@@ -293,10 +264,8 @@ class RealServerSentEvent implements ServerSentEvent {
                 eventName = value;
             } else if (RETRY.equals(field) && DIGITS_ONLY.matcher(value).matches()) {
                 long timeout = Long.parseLong(value);
-                synchronized (RealServerSentEvent.this) {
-                    if (listener != null && listener.onRetryTime(RealServerSentEvent.this, timeout)) {
-                        reconnectTime = timeout;
-                    }
+                if (listener.onRetryTime(RealServerSentEvent.this, timeout)) {
+                    reconnectTime = timeout;
                 }
             }
         }
