@@ -249,7 +249,7 @@ class RealServerSentEvent implements ServerSentEvent {
 
             int colonIndex = line.indexOf(COLON_DIVIDER);
             if (colonIndex == 0) { // If line starts with COLON dispatch a comment
-                synchronized (this) {
+                synchronized (RealServerSentEvent.this) {
                     if (listener != null) {
                         listener.onComment(RealServerSentEvent.this, line.substring(1).trim());
                     }
@@ -278,7 +278,7 @@ class RealServerSentEvent implements ServerSentEvent {
             if (dataString.endsWith("\n")) {
                 dataString = dataString.substring(0, dataString.length() - 1);
             }
-            synchronized (this) {
+            synchronized (RealServerSentEvent.this) {
                 if (listener != null && !dataString.equals(OPEN_MESSAGE_DATA)){
                     listener.onMessage(RealServerSentEvent.this, lastEventId, eventName, dataString);
                 }
@@ -296,7 +296,7 @@ class RealServerSentEvent implements ServerSentEvent {
                 eventName = value;
             } else if (RETRY.equals(field) && DIGITS_ONLY.matcher(value).matches()) {
                 long timeout = Long.parseLong(value);
-                synchronized (this) {
+                synchronized (RealServerSentEvent.this) {
                     if (listener != null && listener.onRetryTime(RealServerSentEvent.this, timeout)) {
                         reconnectTime = timeout;
                     }
