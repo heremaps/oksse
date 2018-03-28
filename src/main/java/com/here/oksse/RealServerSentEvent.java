@@ -161,7 +161,6 @@ class RealServerSentEvent implements ServerSentEvent {
         private static final String RETRY = "retry";
         private static final String DEFAULT_EVENT = "message";
         private static final String EMPTY_STRING = "";
-        private static final String OPEN_MESSAGE_DATA = "\"hello\""; //opening message contains "hello" string
 
         private final Pattern DIGITS_ONLY = Pattern.compile("^[\\d]+$");
 
@@ -248,9 +247,7 @@ class RealServerSentEvent implements ServerSentEvent {
             if (dataString.endsWith("\n")) {
                 dataString = dataString.substring(0, dataString.length() - 1);
             }
-            if (!OPEN_MESSAGE_DATA.equals(dataString)) {
-                listener.onMessage(RealServerSentEvent.this, lastEventId, eventName, dataString);
-            }
+            listener.onMessage(RealServerSentEvent.this, lastEventId, eventName, dataString);
             data.setLength(0);
             eventName = DEFAULT_EVENT;
         }
