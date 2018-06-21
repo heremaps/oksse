@@ -21,7 +21,7 @@ allprojects {
 Add OkSse dependency:
 ```groovy
 dependencies {
-    compile 'com.github.heremaps:oksse:master-SNAPSHOT'
+    implementation 'com.github.heremaps:oksse:0.9.0'
 }
 ```
 
@@ -84,6 +84,16 @@ sse.close();
 ```
 
 Once closed, you will need to create a new instance.
+
+## Alternative constructor
+
+You can provide your own OkHttp client when creating a new OkSse instance.
+
+```java
+OkHttpClient client = new OkHttpClient.Builder().readTimeout(0, TimeUnit.SECONDS).build();
+OkSse oksse = new OkSse(client)
+```
+Note the read timeout set to 0, this is required in order to keep the connection alive, if not OkHttp will close the channel after timeout is reached.
 
 # License
 
