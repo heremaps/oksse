@@ -65,7 +65,7 @@ public class OkSse {
      * @param client
      */
     public OkSse(OkHttpClient client) {
-        this.client = client.newBuilder().protocols(Collections.singletonList(Protocol.HTTP_1_1)).build();
+        this.client = client;
     }
 
     /**
