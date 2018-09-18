@@ -85,12 +85,14 @@ class RealServerSentEvent implements ServerSentEvent {
     }
 
     private void openSse(Response response) {
-        sseReader = new Reader(response.body().source());
-        sseReader.setTimeout(readTimeoutMillis, TimeUnit.MILLISECONDS);
-        listener.onOpen(this, response);
+        try (ResponseBody body = response.body()) {
+            sseReader = new Reader(body.source());
+            sseReader.setTimeout(readTimeoutMillis, TimeUnit.MILLISECONDS);
+            listener.onOpen(this, response);
 
-        //noinspection StatementWithEmptyBody
-        while (call != null && !call.isCanceled() && sseReader.read()) {
+            //noinspection StatementWithEmptyBody
+            while (call != null && !call.isCanceled() && sseReader.read()) {
+            }
         }
     }
 
